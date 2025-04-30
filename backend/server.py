@@ -1,83 +1,79 @@
-import socket       # Import socket library to create server socket
-import threading    # Import threading to handle multiple clients simultaneously
+import socket       # Lets the server talk over the internet
+import threading    # Allows the server to handle many users at once
 
 # ======== Configuration ========
-HOST = '127.0.0.1'  # IP address where server will listen (localhost for testing)
-PORT = 12345        # Port number to listen on
+HOST = '127.0.0.1'  # Localhost IP (only works on your own machine)
+PORT = 12345        # Port number for chat app (like a door where clients connect)
 
 # ======== Client Management ========
-clients = {}        # Dictionary to store client sockets and usernames {socket: username}
+clients = {}        # Dictionary to keep track of users: {client_socket: username}
 
 # ======== Broadcasting Messages ========
 def broadcast(message, sender_socket=None):
     """
-    Send a message to all connected clients except the sender.
-    Used for chat messages and join/leave notifications.
+    Sends a message to all clients (including sender).
     """
-    for client in list(clients.keys()):
-        #if client != sender_socket:
+    for client in list(clients.keys()):  # Make a copy so we can safely remove items
         try:
-            client.send(message.encode('utf-8'))  # Encode message as bytes and send
+            client.send(message.encode('utf-8'))  # Send message as bytes
         except:
-            # Handle broken client connections
+            # If sending fails, remove that client
             client.close()
             del clients[client]
 
 # ======== Handle Individual Client ========
 def handle_client(client_socket, address):
     """
-    Handle communication with a single client.
-    Receives username first, then continuously relays messages.
+    Manages one connected user: receives messages, sends them to others.
     """
     try:
-        # First message from client is their username
-        username = client_socket.recv(1024).decode('utf-8')
-        clients[client_socket] = username
+        username = client_socket.recv(1024).decode('utf-8')  # First message is the username
+        clients[client_socket] = username                    # Store user in dictionary
 
-        # Notify others that a new user has joined
+        # Notify others this user joined
         print(f"[+] {username} has connected from {address}.")
         broadcast(f"🔵 {username} has joined the chat!")
         print(f"[Server] Currently {len(clients)} user(s) connected.")
 
-        # Continuously receive messages from this client
+        # Keep getting messages from this user
         while True:
-            message = client_socket.recv(1024).decode('utf-8')
+            message = client_socket.recv(1024).decode('utf-8')  # Read message
             if message:
-                print(f"[{username}] {message}")  # Log the message on the server side
-                broadcast(f"[{username}] {message}", sender_socket=client_socket)
+                print(f"[{username}] {message}")  # Print it on server
+                broadcast(f"[{username}] {message}", sender_socket=client_socket)  # Send to others
             else:
-                break  # Empty message indicates client disconnection
+                break  # If message is empty, user left
 
     except:
-        # Handle any unexpected errors silently (to avoid server crash)
+        # Ignore crashes so server doesn't stop
         pass
 
     finally:
-        # When client disconnects, clean up
+        # Clean up when user leaves
         if client_socket in clients:
-            username = clients[client_socket]
-            print(f"[-] {username} has disconnected.")
-            broadcast(f"🔴 {username} has left the chat.")
-            del clients[client_socket]
-        client_socket.close()
+            username = clients[client_socket]                     # Get their name
+            print(f"[-] {username} has disconnected.")            # Show they left
+            broadcast(f"🔴 {username} has left the chat.")        # Tell others
+            del clients[client_socket]                            # Remove from list
+        client_socket.close()                                     # Close their connection
 
 # ======== Start Server ========
 def start_server():
     """
-    Create the server socket, bind it, and accept incoming client connections.
-    Each client is handled in a separate thread.
+    Sets up the server and waits for people to join.
     """
-    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Create TCP socket
-    server.bind((HOST, PORT))                                  # Bind to specified IP and port
-    server.listen()                                            # Start listening for incoming connections
+    server = socket.socket(socket.AF_INET, socket.SOCK_STREAM)  # Make the server socket
+    server.bind((HOST, PORT))                                   # Attach it to IP and port
+    server.listen()                                              # Start listening for users
 
-    print(f"[*] Server started on {HOST}:{PORT}")
+    print(f"[*] Server started on {HOST}:{PORT}")  # Show it's running
 
     while True:
-        client_socket, address = server.accept()                # Accept a new client connection
-        thread = threading.Thread(target=handle_client, args=(client_socket, address))  # Handle client in a new thread
-        thread.start()  # Start the thread
+        client_socket, address = server.accept()  # Wait for someone to join
+        thread = threading.Thread(target=handle_client, args=(client_socket, address))  # One thread per user
+        thread.start()  # Start talking to that user
 
 # ======== Entry Point ========
 if __name__ == "__main__":
-    start_server()
+    start_server()  # Only run if script is executed (not imported)
+
